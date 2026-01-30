@@ -320,11 +320,15 @@ class AgentSupervisor(
         
         val mcpSettings = settings?.mcpSettings
         val mcpEnv = if (mcpSettings != null && mcpSettings.enabled) {
+            val url = "http://${mcpSettings.host}:${mcpSettings.port}/mcp"
             mapOf(
                 "BURP_MCP_PORT" to mcpSettings.port.toString(),
                 "BURP_MCP_HOST" to mcpSettings.host,
                 "BURP_MCP_TOKEN" to mcpSettings.token,
-                "BURP_MCP_API_URL" to "http://${mcpSettings.host}:${mcpSettings.port}/mcp"
+                "BURP_MCP_API_URL" to url,
+                "MCP_SERVER_URL" to url,
+                "MCP_SERVER" to url,
+                "MCP_TOKEN" to mcpSettings.token
             )
         } else {
             emptyMap()

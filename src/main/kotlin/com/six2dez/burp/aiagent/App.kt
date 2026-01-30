@@ -61,6 +61,7 @@ object App {
         passiveAiScanner = PassiveAiScanner(api, supervisor, auditLogger) { settingsRepo.load() }
         activeAiScanner = ActiveAiScanner(api, supervisor, auditLogger) { settingsRepo.load() }
         
+        AgentProfileLoader.ensureBundledProfilesInstalled()
         val settings = settingsRepo.load()
         AgentProfileLoader.setActiveProfile(settings.agentProfile)
         auditLogger.setEnabled(settings.auditEnabled)

@@ -328,7 +328,7 @@ class AgentSettingsRepository(api: MontoyaApi) {
         }
 
         private fun defaultGeminiCmd(): String {
-            return "gemini"
+            return "gemini --output-format text --model gemini-2.5-flash"
         }
 
         private fun defaultOpenCodeCmd(): String {

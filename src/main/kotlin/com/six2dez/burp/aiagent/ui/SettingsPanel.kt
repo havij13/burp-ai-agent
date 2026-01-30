@@ -74,11 +74,11 @@ class SettingsPanel(
             openAiCompatTimeoutSeconds = settings.openAiCompatibleTimeoutSeconds.toString()
         )
     )
-    private val profilePicker = JComboBox(arrayOf("pentester", "bughunter", "auditor")).apply {
-        selectedItem = settings.agentProfile
+    private val profilePicker = JComboBox<String>().apply {
         preferredSize = java.awt.Dimension(140, preferredSize.height)
         maximumSize = java.awt.Dimension(140, preferredSize.height)
     }
+    private val refreshProfilesBtn = JButton("Refresh")
     private val preferredBackend = JComboBox(backends.listBackendIds().toTypedArray()).apply {
         selectedItem = settings.preferredBackendId
         preferredSize = java.awt.Dimension(140, preferredSize.height)
@@ -206,6 +206,7 @@ class SettingsPanel(
     private val scannerTriageButton = JButton("Open triage")
 
     init {
+        refreshProfileOptions()
         panel.background = UiTheme.Colors.surface
         content.layout = BoxLayout(content, BoxLayout.Y_AXIS)
         content.border = EmptyBorder(8, 12, 12, 12)
@@ -228,6 +229,7 @@ class SettingsPanel(
         styleCombo(profilePicker)
         preferredBackend.toolTipText = "Default backend used for new sessions and context actions."
         profilePicker.toolTipText = "Select the AGENTS profile used for system instructions."
+        refreshProfilesBtn.toolTipText = "Reload AGENTS profiles from disk."
         privacyMode.toolTipText = "Controls how traffic is redacted before sending to a model."
         determinism.font = UiTheme.Typography.body
         determinism.background = UiTheme.Colors.surface
@@ -313,7 +315,14 @@ class SettingsPanel(
         ).apply {
             backendBody.add(backendConfigPanel, BorderLayout.CENTER)
             val profileGrid = formGrid()
-            addRowFull(profileGrid, "Agent profile", profilePicker)
+            val profileRow = JPanel().apply {
+                layout = BoxLayout(this, BoxLayout.X_AXIS)
+                background = UiTheme.Colors.surface
+                add(profilePicker)
+                add(Box.createRigidArea(java.awt.Dimension(6, 0)))
+                add(refreshProfilesBtn)
+            }
+            addRowFull(profileGrid, "Agent profile", profileRow)
             backendBody.add(profileGrid, BorderLayout.NORTH)
         }
         val privacyBody = JPanel(BorderLayout()).apply {
@@ -396,6 +405,9 @@ class SettingsPanel(
             settings = settings.copy(hostAnonymizationSalt = newSalt)
             rotateSaltBtn.toolTipText = "Rotates the salt used for host anonymization (e.g. host-xxxxxx.local). Current: ${newSalt.take(8)}..."
             JOptionPane.showMessageDialog(panel, "Salt rotated. New anonymized hosts will be different.", "Privacy", JOptionPane.INFORMATION_MESSAGE)
+        }
+        refreshProfilesBtn.addActionListener {
+            refreshProfileOptions()
         }
         backendConfigPanel.onOpenCli = { backendId, command ->
             openExternalCli(backendId, command)
@@ -535,6 +547,19 @@ class SettingsPanel(
         footer.add(save)
         footer.add(restoreDefaults)
         panel.add(footer, BorderLayout.SOUTH)
+    }
+
+    private fun refreshProfileOptions() {
+        val available = AgentProfileLoader.listAvailableProfiles()
+        val fallback = listOf("pentester", "bughunter", "auditor")
+        val options = if (available.isEmpty()) fallback else available
+        val model = DefaultComboBoxModel(options.toTypedArray())
+        val current = (profilePicker.selectedItem as? String ?: settings.agentProfile).trim()
+        if (current.isNotBlank() && options.none { it.equals(current, ignoreCase = true) }) {
+            model.addElement(current)
+        }
+        profilePicker.model = model
+        profilePicker.selectedItem = if (current.isNotBlank()) current else options.firstOrNull()
     }
 
     fun panelComponent() = panel

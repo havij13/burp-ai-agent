@@ -416,7 +416,7 @@ class MainTab(
                 when {
                     settings.opencodeCmd.isBlank() -> "OpenCode command is empty."
                     isWindows() && looksLikeBareExe(settings.opencodeCmd) ->
-                        "OpenCode command looks like a bare .exe. If installed via npm, use 'opencode' (without .exe)."
+                        "OpenCode command looks like a bare .exe. If installed via npm, use 'opencode' (without .exe) or a full path to opencode.cmd."
                     else -> null
                 }
             }

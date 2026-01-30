@@ -37,13 +37,10 @@ JAVA_HOME=/path/to/jdk-21 ./gradlew clean shadowJar
 <!-- screenshot: Burp Extensions > Add dialog with the JAR loaded -->
 ![Load Extension](screenshots/burp-extensions-add.png)
 
-### 3. Install Agent Profiles
+### 3. Agent Profiles
 
-Copy the sample profiles so the AI gets role-specific instructions:
-
-```bash
-cp -r AGENTS/ ~/.burp-ai-agent/AGENTS/
-```
+The extension auto-installs the bundled profiles into `~/.burp-ai-agent/AGENTS/` on first run.
+Drop additional `*.md` files in that directory to add custom profiles.
 
 ### 4. Configure a Backend
 

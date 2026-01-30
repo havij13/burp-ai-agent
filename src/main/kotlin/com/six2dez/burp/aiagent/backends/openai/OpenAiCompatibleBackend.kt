@@ -101,8 +101,9 @@ class OpenAiCompatibleBackend : AiBackend {
                             )
 
                             val json = mapper.writeValueAsString(payload)
+                            val endpointUrl = buildChatCompletionsUrl(baseUrl)
                             val req = Request.Builder()
-                                .url("$baseUrl/v1/chat/completions")
+                                .url(endpointUrl)
                                 .post(json.toRequestBody("application/json".toMediaType()))
                                 .apply {
                                     headers.forEach { (name, value) ->
@@ -202,5 +203,19 @@ class OpenAiCompatibleBackend : AiBackend {
                 else -> 4000
             }
         }
+
+        private fun buildChatCompletionsUrl(baseUrl: String): String {
+            val trimmed = baseUrl.trimEnd('/')
+            val lower = trimmed.lowercase()
+            if (lower.endsWith("/chat/completions")) return trimmed
+            if (versionedEndpointRegex.matches(trimmed)) return trimmed
+            if (versionedBaseRegex.matches(trimmed)) return "$trimmed/chat/completions"
+            return "$trimmed/v1/chat/completions"
+        }
+    }
+
+    private companion object {
+        private val versionedBaseRegex = Regex(".*/v\\d+$", RegexOption.IGNORE_CASE)
+        private val versionedEndpointRegex = Regex(".*/v\\d+/chat/completions$", RegexOption.IGNORE_CASE)
     }
 }

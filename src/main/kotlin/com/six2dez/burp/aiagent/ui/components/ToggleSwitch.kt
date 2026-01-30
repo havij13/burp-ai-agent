@@ -24,16 +24,6 @@ class ToggleSwitch(selected: Boolean = false) : JToggleButton() {
     private val animTimer: Timer
 
     init {
-        isSelected = selected
-        isOpaque = false
-        isFocusPainted = false
-        isContentAreaFilled = false
-        isBorderPainted = false
-        preferredSize = Dimension(trackWidth, trackHeight)
-        minimumSize = Dimension(trackWidth, trackHeight)
-        maximumSize = Dimension(trackWidth, trackHeight)
-        text = ""
-
         animTimer = Timer(15) {
             val target = if (isSelected) maxThumbX() else minThumbX()
             val delta = (maxThumbX() - minThumbX()) / 10f // ~150ms at 15ms interval
@@ -47,6 +37,16 @@ class ToggleSwitch(selected: Boolean = false) : JToggleButton() {
                 animTimer.stop()
             }
         }
+
+        isSelected = selected
+        isOpaque = false
+        isFocusPainted = false
+        isContentAreaFilled = false
+        isBorderPainted = false
+        preferredSize = Dimension(trackWidth, trackHeight)
+        minimumSize = Dimension(trackWidth, trackHeight)
+        maximumSize = Dimension(trackWidth, trackHeight)
+        text = ""
 
         addActionListener {
             animTimer.restart()
@@ -78,4 +78,16 @@ class ToggleSwitch(selected: Boolean = false) : JToggleButton() {
     override fun getPreferredSize(): Dimension = Dimension(trackWidth, trackHeight)
     override fun getMinimumSize(): Dimension = Dimension(trackWidth, trackHeight)
     override fun getMaximumSize(): Dimension = Dimension(trackWidth, trackHeight)
+
+    override fun setSelected(selected: Boolean) {
+        val wasSelected = isSelected
+        super.setSelected(selected)
+        if (wasSelected == selected) return
+        if (!isShowing) {
+            thumbX = if (selected) maxThumbX() else minThumbX()
+            repaint()
+            return
+        }
+        animTimer.restart()
+    }
 }

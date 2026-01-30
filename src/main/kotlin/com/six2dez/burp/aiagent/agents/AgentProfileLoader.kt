@@ -11,10 +11,17 @@ data class AgentProfile(
 )
 
 object AgentProfileLoader {
-    private val baseDir: Path = Paths.get(
+    private val defaultBaseDir: Path = Paths.get(
         System.getProperty("user.home"),
         ".burp-ai-agent",
         "AGENTS"
+    )
+    @Volatile
+    internal var baseDirOverride: Path? = null
+    private val bundledProfiles = listOf(
+        "pentester.md",
+        "bughunter.md",
+        "auditor.md"
     )
 
     @Volatile
@@ -30,12 +37,55 @@ object AgentProfileLoader {
         val normalized = normalizeProfileName(profileName)
         if (normalized.isBlank()) return
         try {
+            val baseDir = baseDir()
             Files.createDirectories(baseDir)
             val defaultFile = baseDir.resolve("default")
             Files.writeString(defaultFile, normalized)
             invalidateCache()
         } catch (e: Exception) {
             BackendDiagnostics.logError("Failed to set AGENTS profile: ${e.message}")
+        }
+    }
+
+    fun listAvailableProfiles(): List<String> {
+        ensureBundledProfilesInstalled()
+        return try {
+            val baseDir = baseDir()
+            Files.createDirectories(baseDir)
+            Files.list(baseDir).use { stream ->
+                stream
+                    .filter { Files.isRegularFile(it) }
+                    .map { it.fileName.toString() }
+                    .filter { it.lowercase().endsWith(".md") }
+                    .map { name ->
+                        if (name.lowercase().endsWith(".md")) name.dropLast(3) else name
+                    }
+                    .distinct()
+                    .sorted(String.CASE_INSENSITIVE_ORDER)
+                    .toList()
+            }
+        } catch (e: Exception) {
+            BackendDiagnostics.logError("Failed to list AGENTS profiles: ${e.message}")
+            emptyList()
+        }
+    }
+
+    fun ensureBundledProfilesInstalled() {
+        try {
+            val baseDir = baseDir()
+            Files.createDirectories(baseDir)
+            val loader = AgentProfileLoader::class.java.classLoader
+            for (profile in bundledProfiles) {
+                val target = baseDir.resolve(profile)
+                if (Files.exists(target)) continue
+                val resourcePath = "AGENTS/$profile"
+                val stream = loader.getResourceAsStream(resourcePath) ?: continue
+                stream.use { input ->
+                    Files.copy(input, target)
+                }
+            }
+        } catch (e: Exception) {
+            BackendDiagnostics.logError("Failed to install bundled AGENTS profiles: ${e.message}")
         }
     }
 
@@ -83,6 +133,7 @@ object AgentProfileLoader {
     }
 
     private fun resolveProfilePath(): Path? {
+        val baseDir = baseDir()
         val defaultFile = baseDir.resolve("default")
         val profileName = if (Files.isRegularFile(defaultFile)) {
             try {
@@ -111,6 +162,15 @@ object AgentProfileLoader {
         cachedProfile = null
         cachedPath = null
         cachedModified = -1L
+    }
+
+    private fun baseDir(): Path {
+        return baseDirOverride ?: defaultBaseDir
+    }
+
+    internal fun setBaseDirForTests(path: Path?) {
+        baseDirOverride = path
+        invalidateCache()
     }
 
     private fun sectionKeyForAction(actionName: String?): String {

@@ -69,13 +69,33 @@ class CliBackend(
                     }
 
                     val rawOutput = StringBuilder()
-                    val reader = BufferedReader(InputStreamReader(process.inputStream))
-                    reader.forEachLine { line -> rawOutput.appendLine(line) }
+                    val readerThread = Thread({
+                        val reader = BufferedReader(InputStreamReader(process.inputStream))
+                        reader.forEachLine { line -> rawOutput.appendLine(line) }
+                    }, "burp-ai-agent-cli-reader")
+                    readerThread.isDaemon = true
+                    readerThread.start()
 
                     if (!process.waitFor(120, TimeUnit.SECONDS)) {
                         process.destroyForcibly()
-                        onComplete(IllegalStateException("CLI command timed out"))
+                        try {
+                            readerThread.join(2000)
+                        } catch (_: InterruptedException) {
+                            Thread.currentThread().interrupt()
+                        }
+                        val tail = rawOutput.toString().trim().take(2000)
+                        val msg = if (tail.isBlank()) {
+                            "CLI command timed out"
+                        } else {
+                            "CLI command timed out: $tail"
+                        }
+                        onComplete(IllegalStateException(msg))
                         return@submit
+                    }
+                    try {
+                        readerThread.join(2000)
+                    } catch (_: InterruptedException) {
+                        Thread.currentThread().interrupt()
                     }
                     if (process.exitValue() != 0) {
                         val tail = rawOutput.toString().trim().take(2000)
@@ -475,6 +495,13 @@ private fun normalizeWindowsCommand(cmd: List<String>): List<String> {
     val lower = first.lowercase(Locale.ROOT)
     return if (lower.endsWith(".exe")) {
         listOf(first.dropLast(4)) + cmd.drop(1)
+    } else if (lower == "opencode" || lower == "opencode.cmd") {
+        val resolved = resolveWindowsNpmShim("opencode.cmd")
+        if (resolved != null) {
+            listOf(resolved) + cmd.drop(1)
+        } else {
+            cmd
+        }
     } else {
         cmd
     }
@@ -483,4 +510,21 @@ private fun normalizeWindowsCommand(cmd: List<String>): List<String> {
 private fun isWindows(): Boolean {
     val os = System.getProperty("os.name").lowercase(Locale.ROOT)
     return os.contains("win")
+}
+
+private fun resolveWindowsNpmShim(executable: String): String? {
+    val candidates = mutableListOf<java.io.File>()
+    val appData = System.getenv("APPDATA")?.takeIf { it.isNotBlank() }
+    val localAppData = System.getenv("LOCALAPPDATA")?.takeIf { it.isNotBlank() }
+    val userProfile = System.getenv("USERPROFILE")?.takeIf { it.isNotBlank() }
+    if (appData != null) {
+        candidates.add(java.io.File(appData, "npm\\$executable"))
+    }
+    if (localAppData != null) {
+        candidates.add(java.io.File(localAppData, "npm\\$executable"))
+    }
+    if (userProfile != null) {
+        candidates.add(java.io.File(userProfile, "AppData\\Roaming\\npm\\$executable"))
+    }
+    return candidates.firstOrNull { it.exists() }?.absolutePath
 }

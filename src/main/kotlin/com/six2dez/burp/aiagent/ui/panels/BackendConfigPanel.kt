@@ -119,7 +119,7 @@ class BackendConfigPanel(
         lmStudioAutoStart.toolTipText = "Automatically start the LM Studio server when needed."
         lmStudioApiKey.toolTipText = "API key for LM Studio-compatible servers (Authorization: Bearer ...)."
         lmStudioHeaders.toolTipText = "Extra headers (one per line: Header: value)."
-        openAiCompatUrl.toolTipText = "Base URL for OpenAI-compatible HTTP endpoint."
+        openAiCompatUrl.toolTipText = "Base URL for OpenAI-compatible HTTP endpoint (include /v1 or /v4 if required)."
         openAiCompatModel.toolTipText = "Model name sent to the provider."
         openAiCompatApiKey.toolTipText = "API key (Authorization: Bearer ...)."
         openAiCompatHeaders.toolTipText = "Extra headers (one per line: Header: value)."
