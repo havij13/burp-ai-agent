@@ -50,6 +50,7 @@ Open the **AI Agent** tab and go to **Settings**. Pick a backend:
 | :--- | :--- | :--- |
 | **Ollama** | Local HTTP | Install [Ollama](https://ollama.com), run `ollama serve`, pull a model (`ollama pull llama3.1`). |
 | **LM Studio** | Local HTTP | Install [LM Studio](https://lmstudio.ai), load a model, start the server. |
+| **Generic OpenAI-compatible** | HTTP | Provide a base URL and model for any OpenAI-compatible provider. |
 | **Gemini CLI** | Cloud CLI | Install `gemini`, run `gemini auth login`. |
 | **Claude CLI** | Cloud CLI | Install `claude`, set `ANTHROPIC_API_KEY` or run `claude login`. |
 | **Codex CLI** | Cloud CLI | Install `codex`, set `OPENAI_API_KEY`. |
