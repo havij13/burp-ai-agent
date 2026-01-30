@@ -3,6 +3,20 @@
 All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this project adheres to [Semantic Versioning](https://semver.org/).
+## [0.1.2] - 2026-01-30
+
+### Added
+- Documentation notes for Windows npm shim paths (double backslashes) across CLI backends and settings reference.
+- OpenAI-compatible URL behavior documentation, including `/vN` base URL handling.
+
+### Changed
+- Gemini CLI default command updated to `gemini --output-format text --model gemini-2.5-flash`.
+- OpenAI-compatible backend now respects versioned base URLs by appending `/chat/completions` instead of forcing `/v1`.
+- MCP environment variables expanded for wider CLI discovery (`MCP_SERVER_URL`, `MCP_SERVER`, `MCP_TOKEN`).
+
+### Fixed
+- Toggle switches now animate to the correct side when state changes programmatically.
+- CLI embedded mode no longer hangs on stdout reads; timeouts return with output tail for debugging.
 
 ## [0.1.1] - 2026-01-29
 
