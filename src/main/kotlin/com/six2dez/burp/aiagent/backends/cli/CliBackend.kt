@@ -162,8 +162,8 @@ class CliBackend(
                     cmd to prompt
                 }
                 "gemini-cli" -> {
-                    val cmd = buildGeminiCommand(baseCommand, prompt)
-                    cmd to null
+                    val cmd = buildGeminiCommand(baseCommand)
+                    cmd to prompt
                 }
                 "opencode-cli" -> {
                     val cmd = buildOpenCodeCommand(baseCommand, prompt)
@@ -203,7 +203,7 @@ class CliBackend(
             return args
         }
 
-        private fun buildGeminiCommand(cmd: List<String>, prompt: String): List<String> {
+        private fun buildGeminiCommand(cmd: List<String>): List<String> {
             val base = cmd.firstOrNull() ?: "gemini"
             val extras = filterGeminiPromptFlags(cmd.drop(1))
             val args = mutableListOf<String>()
@@ -213,7 +213,10 @@ class CliBackend(
                 args.add("--output-format")
                 args.add("text")
             }
-            args.add(prompt)
+            if (!args.contains("-p") && !args.contains("--prompt")) {
+                args.add("-p")
+                args.add(".")
+            }
             return args
         }
 
