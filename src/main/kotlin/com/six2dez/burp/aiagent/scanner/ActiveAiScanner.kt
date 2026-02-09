@@ -852,6 +852,10 @@ class ActiveAiScanner(
         
         val title = "[AI Active] ${target.vulnHint.vulnClass.name}"
         
+        // Get backend info for metadata
+        val backendInfo = supervisor.getCurrentBackendInfo()
+        val metadataSection = buildMetadataSection(backendInfo, "Active", confirmation.confidence)
+        
         val detail = buildString {
             appendLine("Vulnerability confirmed via active testing")
             appendLine()
@@ -865,7 +869,7 @@ class ActiveAiScanner(
             appendLine("Detection Method: ${payload.detectionMethod}")
             appendLine("Evidence: ${confirmation.evidence}")
             appendLine()
-            appendLine("Confidence: ${confirmation.confidence}%")
+            appendLine(metadataSection)
             appendLine()
             appendLine("(Confirmed via AI active exploitation testing)")
         }
@@ -913,6 +917,30 @@ class ActiveAiScanner(
             
         } catch (e: Exception) {
             api.logging().logToError("[ActiveAiScanner] Failed to create issue: ${e.message}")
+        }
+    }
+
+    private fun buildMetadataSection(backendInfo: AgentSupervisor.BackendInfo?, scanType: String, confidence: Int): String {
+        return buildString {
+            appendLine("---")
+            appendLine()
+            appendLine("### AI Analysis Metadata")
+            appendLine()
+            if (backendInfo != null) {
+                appendLine("**Backend:** ${backendInfo.displayName}")
+                if (backendInfo.model != null) {
+                    appendLine("**Model:** ${backendInfo.model}")
+                }
+            } else {
+                appendLine("**Backend:** Unknown")
+            }
+            appendLine("**Scan Type:** $scanType")
+            appendLine("**Confidence:** $confidence%")
+            
+            val timestamp = java.time.Instant.now().toString().replace('T', ' ').substringBefore('.')
+            appendLine("**Scan Date:** $timestamp UTC")
+            appendLine()
+            appendLine("---")
         }
     }
 

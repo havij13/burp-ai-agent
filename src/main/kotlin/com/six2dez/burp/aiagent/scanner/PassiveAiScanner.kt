@@ -591,11 +591,24 @@ $metadata
                     api.logging().logToOutput("[PassiveAiScanner] Consolidated duplicate issue: $issueName")
                     true
                 } else {
-                    val confidenceNote = if (confidence < 85) "\nWARNING: Lower confidence - manual verification recommended" else ""
                     val sanitizedDetail = IssueText.sanitize(detail)
+                    
+                    // Get backend info for metadata
+                    val backendInfo = supervisor.getCurrentBackendInfo()
+                    val metadataSection = buildMetadataSection(backendInfo, "Passive", confidence)
+                    
+                    // Build well-formatted detail
+                    val fullDetail = buildString {
+                        appendLine(sanitizedDetail)
+                        appendLine()
+                        appendLine(metadataSection)
+                        appendLine()
+                        appendLine("**Note:** AI passive analysis - may need active confirmation for verification.")
+                    }
+                    
                     val issue = AuditIssue.auditIssue(
                         issueName,
-                        "$sanitizedDetail\n\n(AI passive analysis - may need active confirmation)\nConfidence: $confidence%$confidenceNote",
+                        fullDetail,
                         "Verify the finding manually or use AI Active Scanner for confirmation.",
                         requestResponse.request().url(),
                         severity,
@@ -1036,6 +1049,30 @@ $metadata
                 val key = pair.substring(0, separator)
                 if (sensitiveKey.containsMatchIn(key)) "$key=[REDACTED]" else pair
             }
+        }
+    }
+
+    private fun buildMetadataSection(backendInfo: AgentSupervisor.BackendInfo?, scanType: String, confidence: Int): String {
+        return buildString {
+            appendLine("---")
+            appendLine()
+            appendLine("### AI Analysis Metadata")
+            appendLine()
+            if (backendInfo != null) {
+                appendLine("**Backend:** ${backendInfo.displayName}")
+                if (backendInfo.model != null) {
+                    appendLine("**Model:** ${backendInfo.model}")
+                }
+            } else {
+                appendLine("**Backend:** Unknown")
+            }
+            appendLine("**Scan Type:** $scanType")
+            appendLine("**Confidence:** $confidence%")
+            
+            val timestamp = java.time.Instant.now().toString().replace('T', ' ').substringBefore('.')
+            appendLine("**Scan Date:** $timestamp UTC")
+            appendLine()
+            appendLine("---")
         }
     }
 }

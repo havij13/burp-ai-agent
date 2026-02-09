@@ -29,6 +29,7 @@ class AgentSupervisor(
     private val workerPool: ExecutorService
 ) {
     data class Status(val state: String, val backendId: String?)
+    data class BackendInfo(val backendId: String, val displayName: String, val model: String?)
 
     private sealed class AgentState {
         data object Idle : AgentState()
@@ -354,6 +355,18 @@ class AgentSupervisor(
                 }
             }
         }
+    }
+
+    fun getCurrentBackendInfo(): BackendInfo? {
+        val current = stateRef.get()
+        if (current !is AgentState.Running) return null
+        
+        val config = current.launchConfig
+        return BackendInfo(
+            backendId = current.backendId,
+            displayName = config.displayName,
+            model = config.model
+        )
     }
 
     private fun buildLaunchConfig(backendId: String, sessionId: String, embeddedMode: Boolean, cliSessionId: String? = null): BackendLaunchConfig {

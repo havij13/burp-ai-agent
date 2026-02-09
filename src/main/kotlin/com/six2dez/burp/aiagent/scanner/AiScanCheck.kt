@@ -200,7 +200,7 @@ class AiScanCheck(
         // Create Burp issue
         return AuditIssue.auditIssue(
             "[AI Active] ${vulnClass.name} (Burp Scanner)",
-            buildDetail(insertionPoint, payload, evidence),
+            buildDetail(insertionPoint, payload, evidence, vulnClass),
             ScannerIssueSupport.remediation(vulnClass),
             baseRequestResponse.request().url(),
             ScannerIssueSupport.mapSeverity(vulnClass),
@@ -266,7 +266,23 @@ class AiScanCheck(
         return "Pattern matched"
     }
 
-    private fun buildDetail(insertionPoint: AuditInsertionPoint, payload: Payload, evidence: String): String {
+    private fun buildDetail(insertionPoint: AuditInsertionPoint, payload: Payload, evidence: String, vulnClass: VulnClass): String {
+        val settings = getSettings()
+        val backendId = settings.preferredBackendId
+        val metadataSection = buildString {
+            appendLine("---")
+            appendLine()
+            appendLine("### AI Analysis Metadata")
+            appendLine()
+            appendLine("**Backend:** $backendId (via Burp Scanner)")
+            appendLine("**Scan Type:** Active (Burp Scanner Integration)")
+            appendLine("**Detection:** ${payload.detectionMethod}")
+            val timestamp = java.time.Instant.now().toString().replace('T', ' ').substringBefore('.')
+            appendLine("**Scan Date:** $timestamp UTC")
+            appendLine()
+            appendLine("---")
+        }
+        
         return """
 **AI-Confirmed Vulnerability via Burp Scanner**
 
@@ -282,6 +298,8 @@ ${payload.value.take(500)}
 **Evidence:** $evidence
 
 **Risk Level:** ${payload.risk}
+
+$metadataSection
 
 _(Confirmed via active exploitation testing integrated with Burp Scanner)_
         """.trim()
