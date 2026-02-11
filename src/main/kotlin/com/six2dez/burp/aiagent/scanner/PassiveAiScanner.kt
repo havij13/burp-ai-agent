@@ -9,6 +9,7 @@ import burp.api.montoya.proxy.http.ProxyResponseToBeSentAction
 import burp.api.montoya.scanner.audit.issues.AuditIssue
 import burp.api.montoya.scanner.audit.issues.AuditIssueConfidence
 import burp.api.montoya.scanner.audit.issues.AuditIssueSeverity
+import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.kotlin.registerKotlinModule
 import com.six2dez.burp.aiagent.audit.AuditLogger
@@ -533,39 +534,31 @@ $metadata
     }
 
     private fun handleAiResponse(aiText: String, requestResponse: HttpRequestResponse, minSeverity: String) {
-        val cleaned = cleanJsonResponse(aiText)
-        if (cleaned.isBlank() || cleaned == "[]") return
+        val issues = parseIssuesFromAiResponse(aiText)
+        if (issues.isEmpty()) return
+        val settings = getSettings()
 
-        try {
-            // Parse JSON manually to avoid Jackson classloader issues
-            val issues = parseIssuesJson(cleaned)
-            if (issues.isEmpty()) return
-            val settings = getSettings()
-
-            for (item in issues) {
-                val confidence = item.confidence ?: 0
-                val title = (item.title ?: "AI Potential Issue").take(120)
-                val rawSeverity = item.severity ?: "Information"
-                val reasoning = item.reasoning ?: ""
-                val detail = buildString {
-                    if (reasoning.isNotBlank()) {
-                        appendLine("Analysis Reasoning")
-                        reasoning.trim().lines().forEach { line ->
-                            if (line.isNotBlank()) {
-                                appendLine("  $line")
-                            } else {
-                                appendLine()
-                            }
+        for (item in issues) {
+            val confidence = item.confidence ?: 0
+            val title = (item.title ?: "AI Potential Issue").take(120)
+            val rawSeverity = item.severity ?: "Information"
+            val reasoning = item.reasoning ?: ""
+            val detail = buildString {
+                if (reasoning.isNotBlank()) {
+                    appendLine("Analysis Reasoning")
+                    reasoning.trim().lines().forEach { line ->
+                        if (line.isNotBlank()) {
+                            appendLine("  $line")
+                        } else {
+                            appendLine()
                         }
-                        appendLine()
                     }
-                    appendLine((item.detail ?: "No detail from AI").trim())
-                }.trim()
+                    appendLine()
+                }
+                appendLine((item.detail ?: "No detail from AI").trim())
+            }.trim()
 
-                handleFinding(requestResponse, title, rawSeverity, detail, confidence, minSeverity, settings, "ai")
-            }
-        } catch (e: Exception) {
-            api.logging().logToError("[PassiveAiScanner] Failed to parse AI response: ${e.message}")
+            handleFinding(requestResponse, title, rawSeverity, detail, confidence, minSeverity, settings, "ai")
         }
     }
 
@@ -987,8 +980,54 @@ $metadata
 
     internal fun parseIssuesJson(json: String): List<AiIssueItem> {
         val root = jsonMapper.readTree(json)
-        if (!root.isArray) return emptyList()
-        return root.mapNotNull { node ->
+        return parseIssuesNode(root)
+    }
+
+    internal fun parseIssuesFromAiResponse(text: String): List<AiIssueItem> {
+        if (text.isBlank()) return emptyList()
+        val cleaned = cleanJsonResponse(text)
+        if (cleaned.isBlank() || cleaned == "[]") return emptyList()
+        return try {
+            parseIssuesJson(cleaned)
+        } catch (e: Exception) {
+            val preview = text.replace(Regex("\\s+"), " ").take(160)
+            api.logging().logToError("[PassiveAiScanner] Failed to parse AI response after cleanup: ${e.message} | preview=$preview")
+            emptyList()
+        }
+    }
+
+    internal fun cleanJsonResponse(text: String): String {
+        if (text.isBlank()) return ""
+        val cleaned = stripCodeFences(text.trim())
+        if (cleaned.isBlank()) return ""
+
+        // Fast path: whole payload is already valid JSON.
+        parseNodeIfValid(cleaned)?.let { node ->
+            return when {
+                node.isArray -> cleaned
+                node.isObject && (node.has("issues") || node.has("findings") || node.has("results")) -> cleaned
+                else -> ""
+            }
+        }
+
+        // Fallback: extract the first balanced JSON array/object from mixed CLI output.
+        for (candidate in extractBalancedJsonCandidates(cleaned)) {
+            val node = parseNodeIfValid(candidate) ?: continue
+            if (node.isArray) return candidate
+            if (node.isObject && (node.has("issues") || node.has("findings") || node.has("results"))) return candidate
+        }
+        return ""
+    }
+
+    private fun parseIssuesNode(root: JsonNode): List<AiIssueItem> {
+        val issueArray = when {
+            root.isArray -> root
+            root.isObject && root.path("issues").isArray -> root.path("issues")
+            root.isObject && root.path("findings").isArray -> root.path("findings")
+            root.isObject && root.path("results").isArray -> root.path("results")
+            else -> return emptyList()
+        }
+        return issueArray.mapNotNull { node ->
             runCatching {
                 AiIssueItem(
                     reasoning = node.path("reasoning").takeIf { !it.isMissingNode && !it.isNull }?.asText(),
@@ -1001,16 +1040,79 @@ $metadata
         }
     }
 
-    internal fun cleanJsonResponse(text: String): String {
-        if (text.isBlank()) return ""
-        var cleaned = text.trim()
-        // Remove markdown code blocks
-        cleaned = cleaned.replace(Regex("^```json\\s*", RegexOption.IGNORE_CASE), "")
-        cleaned = cleaned.replace(Regex("```\\s*$"), "")
-        cleaned = cleaned.replace(Regex("^```\\s*"), "")
-        // Extract JSON array
-        val match = Regex("\\[.*]", RegexOption.DOT_MATCHES_ALL).find(cleaned)
-        return match?.value ?: ""
+    private fun parseNodeIfValid(candidate: String): JsonNode? {
+        return runCatching { jsonMapper.readTree(candidate) }.getOrNull()
+    }
+
+    private fun stripCodeFences(text: String): String {
+        return text
+            .replace(Regex("^```(?:json)?\\s*", setOf(RegexOption.IGNORE_CASE, RegexOption.MULTILINE)), "")
+            .replace(Regex("\\s*```$", RegexOption.MULTILINE), "")
+            .trim()
+    }
+
+    private fun extractBalancedJsonCandidates(text: String): Sequence<String> = sequence {
+        val openers = setOf('[', '{')
+        var start = -1
+        var stack = ArrayDeque<Char>()
+        var inString = false
+        var escaped = false
+
+        for (i in text.indices) {
+            val ch = text[i]
+            if (inString) {
+                if (escaped) {
+                    escaped = false
+                    continue
+                }
+                if (ch == '\\') {
+                    escaped = true
+                    continue
+                }
+                if (ch == '"') {
+                    inString = false
+                }
+                continue
+            }
+
+            if (ch == '"') {
+                inString = true
+                continue
+            }
+
+            if (start < 0 && ch in openers) {
+                start = i
+                stack = ArrayDeque()
+                stack.addLast(ch)
+                continue
+            }
+
+            if (start >= 0) {
+                when (ch) {
+                    '[', '{' -> stack.addLast(ch)
+                    ']' -> {
+                        if (stack.isNotEmpty() && stack.last() == '[') {
+                            stack.removeLast()
+                        } else {
+                            start = -1
+                            stack.clear()
+                        }
+                    }
+                    '}' -> {
+                        if (stack.isNotEmpty() && stack.last() == '{') {
+                            stack.removeLast()
+                        } else {
+                            start = -1
+                            stack.clear()
+                        }
+                    }
+                }
+                if (start >= 0 && stack.isEmpty()) {
+                    yield(text.substring(start, i + 1).trim())
+                    start = -1
+                }
+            }
+        }
     }
 
     private fun mapSeverity(raw: String): AuditIssueSeverity {
